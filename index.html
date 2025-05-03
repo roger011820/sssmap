@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Free Location Picker</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-image/leaflet-image.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+
+    .form-container {
+      max-width: 400px;
+      margin: 30px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+    }
+
+    input, button {
+      width: calc(100% - 2px);
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+    }
+
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    #map {
+      width: 90%;
+      height: 300px;
+      margin: 20px auto;
+      display: none;
+    }
+
+    #confirmBtn {
+      display: none;
+      margin-top: 10px;
+    }
+
+    #finalResult {
+      display: none;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    #finalImage {
+      width: 300px;
+      height: 300px;
+      object-fit: cover;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    .final-details {
+      text-align: left;
+      max-width: 300px;
+    }
+
+    .final-details p {
+      margin: 8px 0;
+      font-size: 16px;
+    }
+
+    .section-label {
+      margin-top: 15px;
+      font-weight: bold;
+      font-size: 18px;
+    }
+
+    .info-message {
+      display: none;
+      margin-top: 20px;
+      font-size: 14px;
+      color: #777;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Free Location Picker</h2>
+
+  <div class="form-container" id="formSection">
+    <input type="date" id="date" placeholder="Date">
+    <input id="employer" placeholder="Name of Employer">
+
+    <div class="section-label">Location</div>
+    <input id="province" placeholder="Province" value="Davao del Sur">
+    <input id="city" placeholder="City/Municipality" value="Digos City">
+    <input id="barangay" placeholder="Barangay" value="Zone 1">
+
+    <button onclick="searchLocation()">Search Location</button>
+  </div>
+
+  <div class="info-message" id="infoMessage">
+    <p><strong>Note:</strong> The captured map and location details will only appear after you click "Confirm Location".</p>
+  </div>
+
+  <div id="map"></div>
+  <button id="confirmBtn" onclick="confirmLocation()">Confirm Location</button>
+
+  <div id="finalResult">
+    <img id="finalImage" src="" alt="Captured Map Image">
+    <div class="final-details">
+      <h3>Final Location Details</h3>
+      <p><strong>Date:</strong> <span id="showDate"></span></p>
+      <p><strong>Employer:</strong> <span id="showEmployer"></span></p>
+      <p><strong>Province:</strong> <span id="showProvince"></span></p>
+      <p><strong>City/Municipality:</strong> <span id="showCity"></span></p>
+      <p><strong>Barangay:</strong> <span id="showBarangay"></span></p>
+      <p><strong>Latitude:</strong> <span id="showLat"></span></p>
+      <p><strong>Longitude:</strong> <span id="showLng"></span></p>
+
+      <button onclick="saveDetails()">Save</button>
+    </div>
+  </div>
+
+  <script>
+    let map = L.map('map');
+    let marker;
+    let lastLatLng = null;
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    function searchLocation() {
+      const address = [
+        document.getElementById("barangay").value,
+        document.getElementById("city").value,
+        document.getElementById("province").value,
+        "Philippines"
+      ].filter(Boolean).join(", ");
+
+      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.length > 0) {
+            const loc = data[0];
+            const lat = parseFloat(loc.lat);
+            const lon = parseFloat(loc.lon);
+            lastLatLng = { lat, lng: lon };
+
+            document.getElementById("formSection").style.display = "none";
+            document.getElementById("map").style.display = "block";
+            document.getElementById("infoMessage").style.display = "block";
+
+            map.setView([lat, lon], 17);
+            map.invalidateSize();
+
+            if (marker) {
+              marker.setLatLng([lat, lon]);
+            } else {
+              marker = L.marker([lat, lon], { draggable: true }).addTo(map);
+              marker.on('dragend', function () {
+                const newPos = marker.getLatLng();
+                lastLatLng = { lat: newPos.lat, lng: newPos.lng };
+              });
+            }
+
+            document.getElementById("confirmBtn").style.display = "inline-block";
+          } else {
+            alert("Location not found. Try a more specific address.");
+          }
+        });
+    }
+
+    function confirmLocation() {
+      leafletImage(map, function(err, canvas) {
+        if (!err) {
+          document.getElementById("finalImage").src = canvas.toDataURL("image/png");
+        }
+
+        document.getElementById("map").style.display = "none";
+        document.getElementById("confirmBtn").style.display = "none";
+        document.getElementById("infoMessage").style.display = "none";
+        document.getElementById("finalResult").style.display = "flex";
+
+        document.getElementById("showDate").innerText = document.getElementById("date").value;
+        document.getElementById("showEmployer").innerText = document.getElementById("employer").value;
+        document.getElementById("showProvince").innerText = document.getElementById("province").value;
+        document.getElementById("showCity").innerText = document.getElementById("city").value;
+        document.getElementById("showBarangay").innerText = document.getElementById("barangay").value;
+
+        if (lastLatLng) {
+          document.getElementById("showLat").innerText = lastLatLng.lat.toFixed(6);
+          document.getElementById("showLng").innerText = lastLatLng.lng.toFixed(6);
+        }
+      });
+    }
+
+    function saveDetails() {
+      alert("Details saved successfully! (You can replace this alert with actual save logic.)");
+    }
+  </script>
+</body>
+</html>
